@@ -21,6 +21,8 @@
   ];
 
   let adDomains = [];       // content.js tarafindan senkronize edilir
+  let extEnabled = true;    // "Eklenti aktif" ayari
+  let siteWhitelist = [];   // "bu sitede devre disi birak" listesi
   let lastGesture = null;   // { time, consumed }
   const GESTURE_TTL_MS = 1200;
 
@@ -49,11 +51,31 @@
     return adDomains.some((d) => host === d || host.endsWith("." + d));
   }
 
+  // Bir sitenin KENDI alan adina actigi pencere (ör. bankanin/e-devletin
+  // kendi onay/dokuman penceresi) neredeyse hicbir zaman reklam amacli
+  // degildir; bu yuzden jest sarti gibi kisitlamalardan muaf tutulur.
+  function isSameSite(hostA, hostB) {
+    if (!hostA || !hostB) return false;
+    const partsA = hostA.split(".").slice(-2).join(".");
+    const partsB = hostB.split(".").slice(-2).join(".");
+    return partsA === partsB;
+  }
+
+  function isProtectionActiveHere() {
+    if (!extEnabled) return false;
+    const host = location.hostname;
+    return !siteWhitelist.some((w) => host === w || host.endsWith("." + w));
+  }
+
   function report(reason, url) {
     window.postMessage({ channel: CHANNEL, kind: "blocked", reason, url }, "*");
   }
 
   function guardedOpen(url, target, features) {
+    if (!isProtectionActiveHere()) {
+      return originalOpen(url, target, features);
+    }
+
     const resolvedUrl = url ? String(url) : "about:blank";
     const host = hostnameOf(resolvedUrl);
 
@@ -64,6 +86,10 @@
     if (isKnownAdHost(host)) {
       report("blocklist", resolvedUrl);
       return null;
+    }
+
+    if (isSameSite(host, location.hostname)) {
+      return originalOpen(url, target, features);
     }
 
     const now = Date.now();
@@ -97,7 +123,15 @@
   window.addEventListener("message", (event) => {
     if (event.source !== window) return;
     const data = event.data;
-    if (!data || data.channel !== CHANNEL || data.kind !== "sync-domains") return;
-    if (Array.isArray(data.domains)) adDomains = data.domains;
+    if (!data || data.channel !== CHANNEL) return;
+
+    if (data.kind === "sync-domains" && Array.isArray(data.domains)) {
+      adDomains = data.domains;
+    }
+
+    if (data.kind === "sync-settings") {
+      if (typeof data.enabled === "boolean") extEnabled = data.enabled;
+      if (Array.isArray(data.whitelist)) siteWhitelist = data.whitelist;
+    }
   });
 })();

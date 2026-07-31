@@ -22,11 +22,19 @@ engelleyici. "Paketlenmemiş öğe" (unpacked) olarak yüklenir.
      popunder zinciri) engellenir.
    - Bilinen reklam alan adlarına giden `window.open` çağrıları,
      jest olsa bile engellenir.
+   - Bir sitenin **kendi alan adına** açtığı pencereler (ör. bir bankanın
+     veya e-devletin kendi onay/dokuman penceresi) jest şartından muaftır
+     — tıklamadan saniyeler sonra gecikmeli açılsa bile engellenmez, çünkü
+     reklam enjeksiyonu neredeyse hiçbir zaman aynı siteden gelmez.
    - Google/Microsoft/Apple/PayPal/Stripe/GitHub gibi gerçek popup
      pencere kullanan giriş/ödeme akışları güvenli listede olduğu için
      hiç etkilenmez.
    - `window.open` referansı donduruldu (`configurable:false`); reklam
      scriptleri orijinalini "geri alamaz".
+   - **"Eklenti aktif" kapatıldığında veya bir site beyaz listeye
+     eklendiğinde bu koruma da (sekme kapatma sezgileri gibi) o site için
+     tamamen devre dışı kalır** — yani beyaz liste gerçek bir "bu siteye
+     hiç dokunma" garantisidir, sadece sekme kapatmayı değil.
 
 3. **Sekme/pencere kapatma sezgileri** (`background.js`):
    - Bir sayfa yeni bir sekme/pencere açtığında (`chrome.tabs.onCreated`),
@@ -40,7 +48,19 @@ engelleyici. "Paketlenmemiş öğe" (unpacked) olarak yüklenir.
 4. **DOM temizliği** (`content.js`): Sayfaya sonradan enjekte edilen,
    bilinen reklam ağlarına ait iframe/script'leri ve ekranı tamamen
    kaplayan, aşırı yüksek z-index'li "tıklama tuzağı" (clickjacking)
-   katmanlarını kaldırır.
+   katmanlarını kaldırır. Bu da "Eklenti aktif" kapalıyken veya site
+   beyaz listedeyken devre dışı kalır.
+
+## Önemli siteler (banka, e-devlet vb.) risk altında mı?
+
+Ağ seviyesi engelleme (1. katman) yalnızca bilinen reklam/takip ağı alan
+adlarını hedefler — banka veya e-devlet siteleri bu listede olmadığı
+için bu katman hiçbir zaman onlara dokunmaz. `window.open` koruması
+(2. katman) da bir sitenin **kendi** açtığı pencerelere karışmaz (yukarı
+bakın). Yine de kritik bir site için tam garanti istiyorsan, o siteyi
+araç çubuğu popup'ından **"bu sitede devre dışı bırak"** ile beyaz
+listeye eklemen en kesin yoldur; bu durumda o sitede eklenti tamamen
+etkisiz hale gelir.
 
 ## Kurulum (paketlenmemiş öğe olarak)
 

@@ -6,6 +6,34 @@
 
 const CHANNEL = "__adblk_channel_v1";
 let adDomains = [];
+let extEnabled = true;
+let siteWhitelist = [];
+
+function isProtectionActiveHere() {
+  if (!extEnabled) return false;
+  const host = location.hostname;
+  return !siteWhitelist.some((w) => host === w || host.endsWith("." + w));
+}
+
+function syncSettingsToPage() {
+  window.postMessage(
+    { channel: CHANNEL, kind: "sync-settings", enabled: extEnabled, whitelist: siteWhitelist },
+    "*"
+  );
+}
+
+chrome.storage.local.get({ enabled: true, whitelist: [] }).then(({ enabled, whitelist }) => {
+  extEnabled = enabled;
+  siteWhitelist = whitelist;
+  syncSettingsToPage();
+});
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "local") return;
+  if (changes.enabled) extEnabled = changes.enabled.newValue;
+  if (changes.whitelist) siteWhitelist = changes.whitelist.newValue;
+  if (changes.enabled || changes.whitelist) syncSettingsToPage();
+});
 
 fetch(chrome.runtime.getURL("rules/domains.txt"))
   .then((r) => r.text())
@@ -95,6 +123,7 @@ function scanForOverlays(root) {
 
 function scanExisting() {
   const run = () => {
+    if (!isProtectionActiveHere()) return;
     removeAdEmbeds(document, adDomains);
     scanForOverlays(document);
   };
@@ -109,6 +138,7 @@ function scanExisting() {
 scanExisting();
 
 const observer = new MutationObserver((mutations) => {
+  if (!isProtectionActiveHere()) return;
   for (const mutation of mutations) {
     mutation.addedNodes.forEach((node) => {
       if (!(node instanceof HTMLElement)) return;
