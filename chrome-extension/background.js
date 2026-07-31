@@ -22,7 +22,7 @@ const SAFE_POPUP_HOSTS = [
 ];
 
 const TAB_STATS = new Map();      // tabId -> engellenen sayaci (bu sayfa icin)
-const OPENER_BURST = new Map();   // openerTabId -> { count, firstTs }
+const OPENER_BURST = new Map();   // windowId -> { count, firstTs }
 const BURST_WINDOW_MS = 4000;
 
 let settings = { ...DEFAULT_SETTINGS };
@@ -86,7 +86,10 @@ function bumpBlockedCount(tabId, amount = 1) {
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   TAB_STATS.delete(tabId);
-  OPENER_BURST.delete(tabId);
+});
+
+chrome.windows.onRemoved.addListener((windowId) => {
+  OPENER_BURST.delete(windowId);
 });
 
 chrome.webNavigation.onCommitted.addListener((details) => {
@@ -109,26 +112,33 @@ if (chrome.declarativeNetRequest.onRuleMatchedDebug) {
 
 async function shouldClosePopupTab(tab) {
   if (!settings.enabled) return false;
-  if (tab.openerTabId == null) return false; // kullanici bilerek yeni sekme actiysa dokunma
+
+  // Chrome, window.open ile YENI PENCERE olarak acilan popup'larda
+  // openerTabId'yi cogu zaman hic doldurmuyor; bu yuzden opener'a degil,
+  // sekmenin hedef adresine gore karar veriyoruz. Hedefi henuz belli
+  // olmayan (bos/yeni sekme) sekmelere dokunmuyoruz - bunlar genelde
+  // kullanicinin kendi actigi sekmelerdir.
+  const targetUrl = tab.url || tab.pendingUrl || "";
+  const targetHost = hostnameOf(targetUrl);
+  const isBlankStart = !targetUrl || targetUrl === "about:blank" || targetUrl.startsWith("chrome://newtab");
+  if (isBlankStart) return false;
 
   let openerHost = "";
-  try {
-    const openerTab = await chrome.tabs.get(tab.openerTabId);
-    openerHost = hostnameOf(openerTab.url || openerTab.pendingUrl || "");
-  } catch {
-    // opener tab artik yok; devam et
+  if (tab.openerTabId != null) {
+    try {
+      const openerTab = await chrome.tabs.get(tab.openerTabId);
+      openerHost = hostnameOf(openerTab.url || openerTab.pendingUrl || "");
+    } catch {
+      // opener tab artik yok; devam et
+    }
   }
 
   if (openerHost && isWhitelisted(openerHost)) return false;
-
-  const targetUrl = tab.url || tab.pendingUrl || "";
-  const targetHost = hostnameOf(targetUrl);
-
-  if (targetHost && isSafePopupHost(targetHost)) return false;
-  if (targetHost && openerHost && isSameSite(targetHost, openerHost)) return false;
+  if (isSafePopupHost(targetHost)) return false;
+  if (openerHost && isSameSite(targetHost, openerHost)) return false;
 
   const blockedDomains = new Set([...KNOWN_AD_DOMAINS, ...settings.customDomains]);
-  if (targetHost && [...blockedDomains].some((d) => targetHost === d || targetHost.endsWith("." + d))) {
+  if ([...blockedDomains].some((d) => targetHost === d || targetHost.endsWith("." + d))) {
     return true;
   }
 
@@ -143,24 +153,63 @@ async function shouldClosePopupTab(tab) {
     // yoksay
   }
 
-  // Ayni opener'dan kisa surede art arda yeni sekme acilmasi (popunder zinciri)
+  // Ayni pencerede kisa surede art arda yeni sekme acilmasi (popunder
+  // zinciri). openerTabId guvenilir olmadigi icin pencere id'sine gore
+  // izleniyor - bir pencerede kisa surede birden fazla yeni sekmenin
+  // belirmesi zaten supheli bir davranistir.
   const now = Date.now();
-  const burst = OPENER_BURST.get(tab.openerTabId);
+  const burst = OPENER_BURST.get(tab.windowId);
   if (!burst || now - burst.firstTs > BURST_WINDOW_MS) {
-    OPENER_BURST.set(tab.openerTabId, { count: 1, firstTs: now });
+    OPENER_BURST.set(tab.windowId, { count: 1, firstTs: now });
     return false;
   }
   burst.count += 1;
-  if (burst.count > 1) return true;
-  return false;
+  return burst.count > 1;
+}
+
+// chrome.tabs.onCreated, ozellikle YENI PENCERE olarak acilan popup'larda,
+// hedef adres henuz atanmadan once tetiklenebiliyor (tab.url/pendingUrl bos
+// gelir). Bu durumda adres netlesene kadar chrome.tabs.onUpdated ile kisa
+// bir sure beklenir; aksi halde reklam hedefi hic tespit edilemez.
+function waitForTabTarget(tabId, timeoutMs = 1500) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (tab) => {
+      if (done) return;
+      done = true;
+      chrome.tabs.onUpdated.removeListener(listener);
+      clearTimeout(timer);
+      resolve(tab);
+    };
+    const listener = (updatedTabId, _changeInfo, updatedTab) => {
+      if (updatedTabId !== tabId) return;
+      const url = updatedTab.url || updatedTab.pendingUrl || "";
+      if (url && url !== "about:blank" && !url.startsWith("chrome://newtab")) {
+        finish(updatedTab);
+      }
+    };
+    chrome.tabs.onUpdated.addListener(listener);
+    const timer = setTimeout(() => {
+      chrome.tabs.get(tabId).then(finish).catch(() => finish(null));
+    }, timeoutMs);
+  });
 }
 
 chrome.tabs.onCreated.addListener(async (tab) => {
   try {
-    const close = await shouldClosePopupTab(tab);
+    let currentTab = tab;
+    const initialUrl = currentTab.url || currentTab.pendingUrl || "";
+    const initialBlank = !initialUrl || initialUrl === "about:blank" || initialUrl.startsWith("chrome://newtab");
+    if (initialBlank) {
+      const resolved = await waitForTabTarget(tab.id);
+      if (!resolved) return;
+      currentTab = resolved;
+    }
+
+    const close = await shouldClosePopupTab(currentTab);
     if (close) {
-      bumpBlockedCount(tab.openerTabId ?? tab.id, 1);
-      await chrome.tabs.remove(tab.id);
+      bumpBlockedCount(currentTab.openerTabId ?? currentTab.id, 1);
+      await chrome.tabs.remove(currentTab.id);
     }
   } catch {
     // sekme zaten kapanmis olabilir, yoksay
