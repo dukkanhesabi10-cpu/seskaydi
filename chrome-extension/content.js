@@ -5,14 +5,14 @@
 //    domainlerine ait iframe/script'leri DOM'dan temizler.
 
 const CHANNEL = "__adblk_channel_v1";
+let adDomains = [];
 
 fetch(chrome.runtime.getURL("rules/domains.txt"))
   .then((r) => r.text())
   .then((text) => {
-    const domains = text.split("\n").map((l) => l.trim()).filter(Boolean);
-    window.postMessage({ channel: CHANNEL, kind: "sync-domains", domains }, "*");
-    window.__adblkDomains = domains;
-    scanExisting(domains);
+    adDomains = text.split("\n").map((l) => l.trim()).filter(Boolean);
+    window.postMessage({ channel: CHANNEL, kind: "sync-domains", domains: adDomains }, "*");
+    removeAdEmbeds(document, adDomains);
   })
   .catch(() => {});
 
@@ -93,9 +93,9 @@ function scanForOverlays(root) {
   }
 }
 
-function scanExisting(domains) {
+function scanExisting() {
   const run = () => {
-    removeAdEmbeds(document, domains);
+    removeAdEmbeds(document, adDomains);
     scanForOverlays(document);
   };
   if (document.readyState === "loading") {
@@ -103,22 +103,19 @@ function scanExisting(domains) {
   } else {
     run();
   }
-  // Bazi reklamlar sayfa yuklendikten sonra gecikmeli enjekte edilir.
-  [500, 1500, 3000].forEach((ms) => setTimeout(run, ms));
+  // Bazi reklamlar/overlaylar sayfa yuklendikten sonra gecikmeli enjekte edilir.
+  [200, 500, 1500, 3000].forEach((ms) => setTimeout(run, ms));
 }
+scanExisting();
 
 const observer = new MutationObserver((mutations) => {
-  const domains = window.__adblkDomains || [];
-  if (!domains.length) return;
   for (const mutation of mutations) {
     mutation.addedNodes.forEach((node) => {
       if (!(node instanceof HTMLElement)) return;
-      removeAdEmbeds(node.parentNode ? node : document, domains);
-      if (node.matches && (node.matches("div, section, aside"))) {
-        if (isExtremeOverlay(node)) {
-          node.remove();
-          reportRemoved("clickjack-overlay-removed");
-        }
+      if (adDomains.length) removeAdEmbeds(node.parentNode ? node : document, adDomains);
+      if (node.matches && node.matches("div, section, aside") && isExtremeOverlay(node)) {
+        node.remove();
+        reportRemoved("clickjack-overlay-removed");
       }
     });
   }
