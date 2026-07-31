@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>Reklam Popup Engelleyici — Ayarlar</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    max-width: 640px; margin: 0 auto; padding: 28px 20px 60px;
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: #1c1a24; background: #fff; line-height: 1.5;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { color: #eee; background: #1b1826; }
+    .card { background: #262133 !important; border-color: #362f4a !important; }
+    textarea, input[type=text] { background: #1b1826 !important; color: #eee !important; border-color: #443c5c !important; }
+  }
+  h1 { font-size: 20px; }
+  h2 { font-size: 14px; margin-top: 28px; }
+  .card {
+    background: #f4f2fb; border: 1px solid #e4defa; border-radius: 12px;
+    padding: 16px 18px; margin-bottom: 16px;
+  }
+  .row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .muted { color: #6b6480; font-size: 12.5px; }
+  textarea {
+    width: 100%; min-height: 90px; box-sizing: border-box; font-family: monospace;
+    font-size: 12.5px; padding: 8px; border-radius: 8px; border: 1px solid #ccc;
+  }
+  button {
+    border: none; border-radius: 8px; padding: 8px 14px; font-size: 13px;
+    cursor: pointer; background: #7c5cff; color: #fff; margin-top: 8px;
+  }
+  button.danger { background: #e0455d; }
+  ul#whitelistList { list-style: none; padding: 0; margin: 0; }
+  ul#whitelistList li {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 0; border-bottom: 1px solid rgba(128,128,128,0.2); font-size: 13px;
+  }
+  ul#whitelistList li button { margin: 0; padding: 4px 10px; font-size: 12px; background: #e0455d; }
+  .switch { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute; inset: 0; background: #ccc; border-radius: 22px; cursor: pointer; transition: .15s;
+  }
+  .slider::before {
+    content: ""; position: absolute; width: 18px; height: 18px; left: 2px; top: 2px;
+    background: #fff; border-radius: 50%; transition: .15s;
+  }
+  input:checked + .slider { background: #7c5cff; }
+  input:checked + .slider::before { transform: translateX(18px); }
+  .stat { font-size: 28px; font-weight: 700; }
+</style>
+</head>
+<body>
+  <h1>🛡️ Reklam Popup Engelleyici — Ayarlar</h1>
+  <p class="muted">Bu eklenti yalnızca yerel kullanım içindir; Chrome Web Store'a yayınlanmamıştır.</p>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <div>Agresif mod</div>
+        <div class="muted">Bilinmeyen "popup" tipi pencereleri ve art arda açılan sekmeleri de otomatik kapatır. Nadiren gerçek özellik pencerelerini (ör. bazı eski siteler) etkileyebilir — sorun olursa siteyi beyaz listeye ekleyin.</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="aggressiveToggle">
+        <span class="slider"></span>
+      </label>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="stat" id="totalBlockedStat">0</div>
+    <div class="muted">şimdiye kadar engellenen toplam popup/reklam isteği</div>
+    <button id="resetStatsBtn" class="danger">Sayacı sıfırla</button>
+  </div>
+
+  <h2>Beyaz liste (buradaki siteler asla engellenmez)</h2>
+  <div class="card">
+    <ul id="whitelistList"></ul>
+    <p class="muted" id="whitelistEmpty">Henüz beyaz listeye eklenmiş site yok.</p>
+  </div>
+
+  <h2>Özel engellenecek alan adları</h2>
+  <div class="card">
+    <p class="muted">Her satıra bir alan adı yazın (ör. <code>example-ads.com</code>). Yerleşik listeye ek olarak uygulanır.</p>
+    <textarea id="customDomains" placeholder="example-ads.com&#10;another-popup-network.com"></textarea>
+    <button id="saveDomainsBtn">Kaydet</button>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>
