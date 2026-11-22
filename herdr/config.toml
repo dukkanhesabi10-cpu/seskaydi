@@ -1,0 +1,109 @@
+# ~/.config/herdr/config.toml  —  herdr v0.9.x için örnek
+# Değişiklikten sonra:  herdr server reload-config
+# Tam referans:         herdr --default-config
+
+onboarding = false
+
+# ---------------------------------------------------------------- terminal
+[terminal]
+default_shell = ""          # boş → $SHELL
+shell_mode    = "auto"      # macOS'ta login shell, diğerlerinde non-login
+new_cwd       = "follow"    # yeni pane/tab kaynağın dizinini devralır
+
+# ---------------------------------------------------------------- headless orkestrasyon
+# Hiç client bağlı değilken (script/CI ile sürerken) sanal terminal boyutu
+[server]
+headless_cols = 160
+headless_rows = 50
+
+# ---------------------------------------------------------------- git worktree
+# Her agent ayrı branch/checkout'ta: <directory>/<repo>/<branch-slug>
+[worktrees]
+directory = "~/.herdr/worktrees"
+
+# ---------------------------------------------------------------- uzak makineler
+[remote]
+manage_ssh_config = true    # keepalive + ControlMaster bağlantı paylaşımı
+
+# ---------------------------------------------------------------- oturum kalıcılığı
+[session]
+resume_agents_on_restore   = true   # server restart sonrası agent sohbetlerini sürdür
+startup_per_agent_delay_ms = 200    # çok agent varsa sırayla başlat
+
+# ---------------------------------------------------------------- tuşlar
+[keys]
+prefix               = ["ctrl+b", "ctrl+space"]   # ikisi de prefix moduna sokar
+split_horizontal     = "prefix+minus"
+focus_pane_left      = "prefix+h"
+switch_tab           = "prefix+1..9"
+switch_workspace     = "prefix+shift+1..9"
+focus_agent          = "prefix+alt+1..9"          # N. agent'a doğrudan atla
+resize_pane_left     = "ctrl+shift+alt+left"
+resize_pane_right    = "ctrl+shift+alt+right"
+resize_pane_up       = "ctrl+shift+alt+up"
+resize_pane_down     = "ctrl+shift+alt+down"
+
+# Popup'ta lazygit (layout'u bozmaz)
+[[keys.command]]
+key         = "prefix+alt+g"
+type        = "popup"
+command     = "lazygit"
+description = "lazygit"
+width       = "85%"
+height      = "85%"
+
+# Geçici scratch terminal
+[[keys.command]]
+key         = "prefix+t"
+type        = "popup"
+command     = "exec \"${SHELL:-sh}\""
+description = "scratch terminal"
+width       = "80%"
+height      = "80%"
+
+# Arka planda: aktif pane'in dizininde test başlat
+[[keys.command]]
+key         = "prefix+alt+t"
+type        = "shell"
+command     = "\"$HERDR_BIN_PATH\" pane run \"$HERDR_ACTIVE_PANE_ID\" 'make test'"
+description = "aktif pane'de test"
+
+# ---------------------------------------------------------------- tema
+[theme]
+name        = "catppuccin"
+auto_switch = true
+light_name  = "catppuccin-latte"
+dark_name   = "catppuccin"
+
+# ---------------------------------------------------------------- arayüz
+[ui]
+status_indicators       = "symbols"   # durumlar renk + şekille ayrılır
+window_title            = "{hostname}: {workspace}"
+tab_bar_right = [
+  { type = "zoom" },
+  { type = "hostname" },
+  { type = "datetime", format = "%H:%M" },
+]
+tab_bar_right_separator = " · "
+
+[ui.sidebar.agents]
+row_gap = 0
+rows = [
+  ["state_icon", "agent", "state_text", "machine"],
+  ["workspace", "tab"],
+  ["$summary"],                       # script'ten report-metadata ile beslenir
+]
+
+[ui.sidebar.agents.rows_by_agent]
+claude = [
+  ["state_icon", "agent", "state_text"],
+  ["terminal_title_stripped"],
+  ["workspace", "tab"],
+]
+
+# ---------------------------------------------------------------- bildirimler
+# Arka plandaki agent bitince ya da onay isteyince haber ver.
+# "terminal" SSH üzerinden de çalışır; masaüstünde "system" seçilebilir.
+[ui.toast]
+delivery      = "terminal"
+delay_seconds = 1
